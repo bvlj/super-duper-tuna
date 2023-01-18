@@ -15,7 +15,7 @@ TUTOR_OUT_FILE="$OUT_DIR/issue.txt"
 
 mkdir "$OUT_DIR"
 
-java -jar /opt/expression-service/app.jar analyzer source \
+java -jar /opt/expression-service/app.jar source \
   --format=ACTIVITY \
   --count="$ARG_COUNT" \
   --query="$ARG_QUERY" \
