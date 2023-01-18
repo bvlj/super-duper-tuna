@@ -9,6 +9,7 @@ ARG_GH_TOKEN="$5"
 
 OUT_DIR="/github/workspace/build"
 ES_INPUT_DIR="/github/workspace/$ARG_SRC_DIR"
+ES_JAVA_CLASSPATH="/github/workspace/$ARG_JAVA_CLASSPATH"
 ES_OUT_FILE="$OUT_DIR/activities.ndjson"
 TUTOR_OUT_FILE="$OUT_DIR/issue.txt"
 
@@ -18,7 +19,7 @@ java -jar /opt/expression-service/app.jar analyzer source \
   --format=ACTIVITY \
   --count="$ARG_COUNT" \
   --query="$ARG_QUERY" \
-  --java-classpath="$ARG_JAVA_CLASSPATH" \
+  --java-classpath="$ES_JAVA_CLASSPATH" \
   "$ES_INPUT_DIR" > "$ES_OUT_FILE"
 
 # Clean up ndjson

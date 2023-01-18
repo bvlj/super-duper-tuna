@@ -1,5 +1,8 @@
 name: 'Expression Tutor Activity generation'
 description: 'Generate activities from source code'
+branding:
+  icon: circle
+  color: gray-dark
 inputs:
   query:
     description: 'ETL Query'
