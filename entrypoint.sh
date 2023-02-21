@@ -7,11 +7,17 @@ ARG_SRC_DIR="$3"
 ARG_JAVA_CLASSPATH="$4"
 ARG_GH_TOKEN="$5"
 
-OUT_DIR="/github/workspace/build"
-ES_INPUT_DIR="/github/workspace/$ARG_SRC_DIR"
-ES_JAVA_CLASSPATH="/github/workspace/$ARG_JAVA_CLASSPATH"
+WS_DIR="/github/workspace"
+ES_INPUT_DIR="$WS_DIR/$ARG_SRC_DIR"
+ES_JAVA_CLASSPATH="$WS_DIR/$ARG_JAVA_CLASSPATH"
+
+OUT_DIR="$WS_DIR/build"
 ES_OUT_FILE="$OUT_DIR/activities.ndjson"
 TUTOR_OUT_FILE="$OUT_DIR/issue.txt"
+
+
+# Move to the project directory so that path are properly relativized
+cd /github/workspace
 
 mkdir "$OUT_DIR"
 
@@ -21,9 +27,6 @@ java -jar /opt/expression-service/app.jar source \
   --query="$ARG_QUERY" \
   --java-classpath="$ES_JAVA_CLASSPATH" \
   "$ES_INPUT_DIR" > "$ES_OUT_FILE"
-
-# Clean up ndjson
-sed -i -n '/^{"diagram"/p' "$ES_OUT_FILE"
 
 function create_activity {
   instance_url="https://expressiontutor.org"
@@ -35,16 +38,49 @@ function create_activity {
     exit 2
   fi
 
-  echo "Please complete these follow-up activities on Expression Tutor:\n\n" > "$out_file"
-
   # Invoke the "lucky API" to generate an activity
   url="${instance_url}/api/activities/lucky"
   while read -r line; do
     result=$(curl -s -X POST "$url" -d "$line" -H "Content-Type: application/json")
-    if [[ "$result" == *"\"success\":true"* ]]; then
-      uuid=$(echo "${result}" | sed 's/^.*"uuid":"//')
-      uuid=$(echo "${uuid}" | sed 's/"}$//')
-      echo "- [ ] $instance_url/activity/do?task=$uuid" >> "$out_file"
+    success=$(echo "$result" | jq -r ".success")
+    if [[ "$success" == "true" ]]; then
+      uuid=$(echo "$result" | jq -r ".uuid")
+
+      expression_code=$(echo "$line" | jq -r ".code" | sed 's/"/\\"/g')
+      line_number=$(echo "$line" | jq -r ".line")
+      file_path=$(echo "$line" | jq -r ".path")
+      file_name=$(echo "$file_path" | sed 's|^.*/||')
+
+      gh_url="https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF}/${file_path}#L${line_number}"
+      et_url="${instance_url}/activity/do?task=${uuid}"
+
+      # Create issue message
+      issue_body=$(cat<<EOB
+In the file ${file_name} in line ${line_number} you can find the following expression:
+\`\`\`
+$expression_code
+\`\`\`
+
+${gh_url}
+
+As we have seen in class, the structure of this expression forms a tree.
+Please draw the structure of this expression using expression tutor by following
+[this link](${et_url}).
+
+Once you are done, click the Save button and paste the link as a comment to this issue.
+EOB
+)
+
+      issue_body=$(echo "$issue_body" | tr '\n' '\\n')
+      echo "$issue_body"
+
+      # Create issue
+      curl -X POST \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer $ARG_GH_TOKEN" \
+        -H "Content-Type: application/json" \
+        "https://api.github.com/repos/$GITHUB_REPOSITORY/issues" \
+        -d "{\"title\": \"Expression Tutor activity\", \"body\": \"$issue_body\"}"
     else
       echo "Activity creation failed for $line" 2>&1
     fi
@@ -53,10 +89,3 @@ function create_activity {
 
 create_activity "$ES_OUT_FILE" "$TUTOR_OUT_FILE"
 
-# Create issue
-curl -X POST \
-  -H "Accept: application/vnd.github+json" \
-  -H "Authorization: Bearer $ARG_GH_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://api.github.com/repos/$GITHUB_REPOSITORY/issues" \
-  -d "{\"title\": \"Expression Tutor activities\", \"body\": \"$(cat $TUTOR_OUT_FILE | tr '\n' ' ')\"}"
