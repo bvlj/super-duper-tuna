@@ -5,7 +5,8 @@ ARG_QUERY="$1"
 ARG_COUNT="$2"
 ARG_SRC_DIR="$3"
 ARG_JAVA_CLASSPATH="$4"
-ARG_GH_TOKEN="$5"
+ARG_ACTIVITY_GROUP="$5"
+ARG_GH_TOKEN="$6"
 
 WS_DIR="/github/workspace"
 ES_INPUT_DIR="$WS_DIR/$ARG_SRC_DIR"
@@ -31,7 +32,8 @@ java -jar /opt/expression-service/app.jar source \
 function create_activity {
   instance_url="https://expressiontutor.org"
   activities_file=$1
-  out_file=$2
+  activity_group=$2
+  out_file=$3
 
   if [ ! -r "$activities_file" ]; then
     echo "Error: \"$activities_file\" is not a readable file" 2>&1
@@ -39,7 +41,7 @@ function create_activity {
   fi
 
   # Invoke the "lucky API" to generate an activity
-  url="${instance_url}/api/activities/lucky"
+  url="${instance_url}/api/activities/lucky?group=${activity_group}"
   while read -r line; do
     result=$(curl -s -X POST "$url" -d "$line" -H "Content-Type: application/json")
     success=$(echo "$result" | jq -r ".success")
@@ -51,12 +53,12 @@ function create_activity {
       file_path=$(echo "$line" | jq -r ".path")
       file_name=$(echo "$file_path" | sed 's|^.*/||')
 
-      gh_url="https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF}/${file_path}#L${line_number}"
+      gh_url="https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/${file_path}#L${line_number}"
       et_url="${instance_url}/activity/do?task=${uuid}"
 
       # Create issue message
       issue_body=$(cat<<EOB
-In the file ${file_name} in line ${line_number} you can find the following expression:
+In the file \`${file_name}\` in line ${line_number} you can find the following expression:
 \`\`\`
 $expression_code
 \`\`\`
@@ -87,5 +89,5 @@ EOB
   done < "$activities_file"
 }
 
-create_activity "$ES_OUT_FILE" "$TUTOR_OUT_FILE"
+create_activity "$ES_OUT_FILE" "$ARG_ACTIVITY_GROUP" "$TUTOR_OUT_FILE"
 
